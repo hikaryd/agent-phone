@@ -32,3 +32,4 @@ secrets/
 state/
 status.json
 *.log
+/graphify-out/
