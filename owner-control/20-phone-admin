@@ -1,0 +1,20 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Owner-only HTTPS gateway. Android capture still requires normal user consent.
+umask 077
+termux-wake-lock
+# shellcheck disable=SC2016
+exec flock -n "$HOME/phone-admin/runner.lock" sh -c '
+child=
+state="$HOME/phone-admin/caddy-lifecycle.txt"
+previous_exit=none
+trap '\''[ -z "$child" ] || kill "$child" 2>/dev/null; exit 0'\'' TERM INT
+while :; do
+  caddy run --config "$HOME/phone-admin/Caddyfile" --adapter caddyfile &
+  child=$!
+  printf "started_utc=%s\npid=%s\nprevious_exit=%s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$child" "$previous_exit" > "$state"
+  wait "$child"
+  previous_exit=$?
+  printf "exited_utc=%s\nexit_code=%s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$previous_exit" > "$state"
+  child=
+  sleep 10
+done' >/dev/null 2>&1

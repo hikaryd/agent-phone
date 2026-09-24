@@ -1,0 +1,10 @@
+#!/data/data/com.termux/files/usr/bin/sh
+umask 077
+# The inner shell expands HOME after sh -c starts.
+# shellcheck disable=SC2016
+nohup flock -n "$HOME/agent-phone/recovery-runner.lock" sh -c '
+    while :; do
+        python "$HOME/agent-phone/adb_recovery_watchdog.py"
+        sleep 10
+    done
+' >> "$HOME/agent-phone/recovery.log" 2>&1 </dev/null &

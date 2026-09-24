@@ -1,0 +1,12 @@
+#!/data/data/com.termux/files/usr/bin/sh
+umask 077
+termux-wake-lock
+# The inner shell expands HOME after sh -c starts.
+# shellcheck disable=SC2016
+nohup flock -n "$HOME/agent-phone/runner.lock" sh -c '
+    trap "exit 0" TERM INT
+    while :; do
+        python "$HOME/agent-phone/bridge.py"
+        sleep 10
+    done
+' >> "$HOME/agent-phone/runner.log" 2>&1 </dev/null &

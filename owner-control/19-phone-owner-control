@@ -1,0 +1,20 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Loopback-only owner lease helper; the browser bridge enforces lease expiry.
+umask 077
+termux-wake-lock
+# shellcheck disable=SC2016
+exec flock -n "$HOME/phone-admin/control-runner.lock" sh -c '
+child=
+state="$HOME/phone-admin/control-lifecycle.txt"
+previous_exit=none
+trap '\''[ -z "$child" ] || kill "$child" 2>/dev/null; exit 0'\'' TERM INT
+while :; do
+  python "$HOME/phone-admin/owner_control.py" &
+  child=$!
+  printf "started_utc=%s\npid=%s\nprevious_exit=%s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$child" "$previous_exit" > "$state"
+  wait "$child"
+  previous_exit=$?
+  printf "exited_utc=%s\nexit_code=%s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$previous_exit" > "$state"
+  child=
+  sleep 10
+done' >/dev/null 2>&1

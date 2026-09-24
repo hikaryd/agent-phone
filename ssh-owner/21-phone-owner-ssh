@@ -1,0 +1,5 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Owner shell only. Independent of Chrome and the display lease.
+umask 077
+termux-wake-lock
+exec flock -n "$HOME/phone-owner/runner.lock" python "$HOME/phone-owner/supervisor.py"

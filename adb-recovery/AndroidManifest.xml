@@ -1,0 +1,18 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.agentphone.adbrecovery"
+    android:versionCode="1"
+    android:versionName="1.0">
+    <uses-sdk android:minSdkVersion="34" android:targetSdkVersion="35" />
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+    <application
+        android:allowBackup="false"
+        android:label="Phone ADB Recovery">
+        <receiver
+            android:name=".RecoverReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.agentphone.adbrecovery.RECOVER" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

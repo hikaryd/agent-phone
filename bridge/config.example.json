@@ -1,0 +1,5 @@
+{
+  "serial": "DEVICE_SERIAL_FROM_ADB_AND_MDNS",
+  "ssh_target": "browser-link@203.0.113.20",
+  "foreground_recovery_packages": ["com.android.chrome"]
+}

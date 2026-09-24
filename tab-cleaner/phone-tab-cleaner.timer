@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Phone Chrome tab ages every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=1s
+Unit=phone-tab-cleaner.service
+
+[Install]
+WantedBy=timers.target

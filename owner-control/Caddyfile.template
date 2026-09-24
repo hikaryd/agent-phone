@@ -1,0 +1,285 @@
+# Caddy template. Render every placeholder from private configuration; see ../SETUP.md.
+{
+	admin off
+	auto_https off
+	# No access logs; discard runtime logs too (errors can contain request URLs).
+	log {
+		output discard
+	}
+	servers {
+		protocols h1
+		max_header_size 16KB
+		timeouts {
+			read_header 10s
+			read_body 15s
+			idle 2m
+		}
+	}
+}
+
+# Catch all TLS Host values on this exact bind; reject foreign Host in route.
+https://:8443 {
+	bind __LAN_IP__
+	tls __TERMUX_HOME__/phone-admin/tls.crt __TERMUX_HOME__/phone-admin/tls.key
+
+	@wrong_host expression `{http.request.hostport} != "__LAN_IP__:8443"`
+	@bad_method not method GET HEAD
+	@noncanonical expression `{http.request.uri}.split("?")[0] != {path} || {path}.contains("//") || "." in {path}.split("/") || ".." in {path}.split("/")`
+	@root path /
+	@html path /vnc.html
+	@owner_page {
+		method GET
+		path /owner
+		expression `{query} == ""`
+	}
+	@owner_status {
+		method GET
+		path /owner/status
+		expression `{query} == ""`
+	}
+	@owner_static {
+		method GET HEAD
+		path /vnc.html /owner-session.js
+	}
+	@owner_action {
+		method POST
+		path /owner/start /owner/stop
+		header Origin https://__LAN_IP__:8443
+		expression `{query} == ""`
+	}
+	@websocket {
+		path /websockify
+		method GET
+		header Upgrade websocket
+		header_regexp Connection `(?i)(^|,)[\t ]*upgrade[\t ]*(,|$)`
+		header Origin https://__LAN_IP__:8443
+	}
+	@mime_png {
+		path /app/images/icons/novnc-120x120.png
+		path /app/images/icons/novnc-144x144.png
+		path /app/images/icons/novnc-152x152.png
+		path /app/images/icons/novnc-16x16.png
+		path /app/images/icons/novnc-192x192.png
+		path /app/images/icons/novnc-24x24.png
+		path /app/images/icons/novnc-32x32.png
+		path /app/images/icons/novnc-48x48.png
+		path /app/images/icons/novnc-60x60.png
+		path /app/images/icons/novnc-64x64.png
+		path /app/images/icons/novnc-72x72.png
+		path /app/images/icons/novnc-76x76.png
+		path /app/images/icons/novnc-96x96.png
+	}
+	@mime_ttf {
+		path /app/styles/Orbitron700.ttf
+	}
+	@mime_oga {
+		path /app/sounds/bell.oga
+	}
+	@mime_json {
+		path /app/locale/cs.json
+		path /app/locale/de.json
+		path /app/locale/el.json
+		path /app/locale/es.json
+		path /app/locale/fr.json
+		path /app/locale/ja.json
+		path /app/locale/ko.json
+		path /app/locale/nl.json
+		path /app/locale/pl.json
+		path /app/locale/pt_BR.json
+		path /app/locale/ru.json
+		path /app/locale/sv.json
+		path /app/locale/tr.json
+		path /app/locale/zh_CN.json
+		path /app/locale/zh_TW.json
+	}
+	@assets {
+		method GET HEAD
+		path /app/error-handler.js
+		path /app/images/alt.svg
+		path /app/images/clipboard.svg
+		path /app/images/connect.svg
+		path /app/images/ctrl.svg
+		path /app/images/ctrlaltdel.svg
+		path /app/images/disconnect.svg
+		path /app/images/drag.svg
+		path /app/images/error.svg
+		path /app/images/esc.svg
+		path /app/images/expander.svg
+		path /app/images/fullscreen.svg
+		path /app/images/handle.svg
+		path /app/images/handle_bg.svg
+		path /app/images/icons/novnc-120x120.png
+		path /app/images/icons/novnc-144x144.png
+		path /app/images/icons/novnc-152x152.png
+		path /app/images/icons/novnc-16x16.png
+		path /app/images/icons/novnc-192x192.png
+		path /app/images/icons/novnc-24x24.png
+		path /app/images/icons/novnc-32x32.png
+		path /app/images/icons/novnc-48x48.png
+		path /app/images/icons/novnc-60x60.png
+		path /app/images/icons/novnc-64x64.png
+		path /app/images/icons/novnc-72x72.png
+		path /app/images/icons/novnc-76x76.png
+		path /app/images/icons/novnc-96x96.png
+		path /app/images/icons/novnc-icon-sm.svg
+		path /app/images/icons/novnc-icon.svg
+		path /app/images/info.svg
+		path /app/images/keyboard.svg
+		path /app/images/power.svg
+		path /app/images/settings.svg
+		path /app/images/tab.svg
+		path /app/images/toggleextrakeys.svg
+		path /app/images/warning.svg
+		path /app/images/windows.svg
+		path /app/locale/cs.json
+		path /app/locale/de.json
+		path /app/locale/el.json
+		path /app/locale/es.json
+		path /app/locale/fr.json
+		path /app/locale/ja.json
+		path /app/locale/ko.json
+		path /app/locale/nl.json
+		path /app/locale/pl.json
+		path /app/locale/pt_BR.json
+		path /app/locale/ru.json
+		path /app/locale/sv.json
+		path /app/locale/tr.json
+		path /app/locale/zh_CN.json
+		path /app/locale/zh_TW.json
+		path /app/localization.js
+		path /app/sounds/bell.mp3
+		path /app/sounds/bell.oga
+		path /app/styles/Orbitron700.ttf
+		path /app/styles/Orbitron700.woff
+		path /app/styles/base.css
+		path /app/ui.js
+		path /app/webutil.js
+		path /core/base64.js
+		path /core/decoders/copyrect.js
+		path /core/decoders/hextile.js
+		path /core/decoders/raw.js
+		path /core/decoders/rre.js
+		path /core/decoders/tight.js
+		path /core/decoders/tightpng.js
+		path /core/deflator.js
+		path /core/des.js
+		path /core/display.js
+		path /core/encodings.js
+		path /core/inflator.js
+		path /core/input/domkeytable.js
+		path /core/input/fixedkeys.js
+		path /core/input/gesturehandler.js
+		path /core/input/keyboard.js
+		path /core/input/keysym.js
+		path /core/input/keysymdef.js
+		path /core/input/util.js
+		path /core/input/vkeys.js
+		path /core/input/xtscancodes.js
+		path /core/rfb.js
+		path /core/util/browser.js
+		path /core/util/cursor.js
+		path /core/util/element.js
+		path /core/util/events.js
+		path /core/util/eventtarget.js
+		path /core/util/int.js
+		path /core/util/logging.js
+		path /core/util/strings.js
+		path /core/websock.js
+		path /vendor/pako/lib/utils/common.js
+		path /vendor/pako/lib/zlib/adler32.js
+		path /vendor/pako/lib/zlib/constants.js
+		path /vendor/pako/lib/zlib/crc32.js
+		path /vendor/pako/lib/zlib/deflate.js
+		path /vendor/pako/lib/zlib/gzheader.js
+		path /vendor/pako/lib/zlib/inffast.js
+		path /vendor/pako/lib/zlib/inflate.js
+		path /vendor/pako/lib/zlib/inftrees.js
+		path /vendor/pako/lib/zlib/messages.js
+		path /vendor/pako/lib/zlib/trees.js
+		path /vendor/pako/lib/zlib/zstream.js
+	}
+
+	# route preserves this security-critical order, including the terminal deny.
+	route {
+		header {
+			-Server
+			X-Content-Type-Options nosniff
+			X-Frame-Options DENY
+			Referrer-Policy same-origin
+			Cache-Control no-store
+			Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		}
+		header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; media-src 'self'; connect-src 'self' wss://__LAN_IP__:8443; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		respond @wrong_host 404
+		basic_auth bcrypt "Phone owner" {
+			__OWNER_USERNAME__ __OWNER_BCRYPT_HASH__
+		}
+		respond @noncanonical 404
+		header @owner_page Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+		reverse_proxy @owner_page 127.0.0.1:8766 {
+			header_up Host 127.0.0.1:8766
+			header_up X-Phone-Control __CONTROL_TOKEN__
+			header_up -Authorization
+			header_up -Proxy-Authorization
+			header_up -Cookie
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 40s
+			}
+		}
+		reverse_proxy @owner_status 127.0.0.1:8766 {
+			header_up Host 127.0.0.1:8766
+			header_up X-Phone-Control __CONTROL_TOKEN__
+			header_up -Authorization
+			header_up -Proxy-Authorization
+			header_up -Cookie
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 40s
+			}
+		}
+		reverse_proxy @owner_action 127.0.0.1:8766 {
+			header_up Host 127.0.0.1:8766
+			header_up X-Phone-Control __CONTROL_TOKEN__
+			header_up -Authorization
+			header_up -Proxy-Authorization
+			header_up -Cookie
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 40s
+			}
+		}
+		respond @bad_method 405
+		# Bundled HTTP server omits HTML MIME; keep nosniff, fix exact HTML only.
+		header @html >Content-Type "text/html; charset=utf-8"
+		header @mime_json >Content-Type application/json
+		header @mime_oga >Content-Type audio/ogg
+		header @mime_ttf >Content-Type font/ttf
+		header @mime_png >Content-Type image/png
+		redir @root /owner 302
+		reverse_proxy @websocket 127.0.0.1:5900 {
+			header_up -Authorization
+			header_up -Proxy-Authorization
+			header_up -Cookie
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 10s
+			}
+		}
+		file_server @owner_static {
+			root __TERMUX_HOME__/phone-admin/static
+		}
+		reverse_proxy @assets 127.0.0.1:5800 {
+			# Backend lacks HEAD; net/http suppresses response body for client HEAD.
+			method GET
+			header_up -Authorization
+			header_up -Proxy-Authorization
+			header_up -Cookie
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 10s
+			}
+		}
+		respond 404
+	}
+}
