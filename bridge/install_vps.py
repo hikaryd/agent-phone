@@ -35,7 +35,9 @@ def verify_effective(client_address):
     }
     output = subprocess.check_output(
         [
-            "/usr/sbin/sshd", "-T", "-C",
+            "/usr/sbin/sshd",
+            "-T",
+            "-C",
             f"user=browser-link,host={client_address},addr={client_address}",
         ],
         text=True,
@@ -59,13 +61,17 @@ def main():
     link = public_key(args.link_key.read_text())
     target = pathlib.Path("/etc/ssh/sshd_config.d/61-agent-phone-browser.conf")
     if target.exists():
-        raise SystemExit("Browser SSH config already exists; inspect instead of overwrite")
+        raise SystemExit(
+            "Browser SSH config already exists; inspect instead of overwrite"
+        )
     try:
         pwd.getpwnam("browser-link")
     except KeyError:
         pass
     else:
-        raise SystemExit("Browser identity already exists; inspect instead of overwrite")
+        raise SystemExit(
+            "Browser identity already exists; inspect instead of overwrite"
+        )
     listeners = subprocess.check_output(["ss", "-H", "-ltn"], text=True)
     if any(line.split()[3].endswith(":19222") for line in listeners.splitlines()):
         raise SystemExit("Port 19222 already in use")

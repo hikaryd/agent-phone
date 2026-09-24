@@ -13,7 +13,11 @@ COMPONENT = "dev.agentphone.adbrecovery/.RecoverReceiver"
 
 
 def request_due(now, failure_since, last_request):
-    return failure_since is not None and now - failure_since >= 20 and now - last_request >= 60
+    return (
+        failure_since is not None
+        and now - failure_since >= 20
+        and now - last_request >= 60
+    )
 
 
 def run(*args, timeout=8):
@@ -62,7 +66,10 @@ def main():
                         failure_since = now
                     if request_due(now, failure_since, last_request):
                         lease, _ = inspect_lease(HOME / "display-owner-lease")
-                        if lease is None and not (HOME / "adb-recovery-paused").exists():
+                        if (
+                            lease is None
+                            and not (HOME / "adb-recovery-paused").exists()
+                        ):
                             last_request = now
                             result = ask_helper()
                             if result.returncode != 0:
@@ -70,7 +77,9 @@ def main():
                 write_status(
                     adb_connected=connected,
                     failure_seconds=round(now - failure_since) if failure_since else 0,
-                    last_request_monotonic=round(last_request) if last_request > 0 else None,
+                    last_request_monotonic=round(last_request)
+                    if last_request > 0
+                    else None,
                     paused=(HOME / "adb-recovery-paused").exists(),
                     error=error,
                 )

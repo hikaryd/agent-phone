@@ -15,14 +15,13 @@ import time
 import urllib.request
 
 sys.path.insert(0, str(pathlib.Path.home() / "phone-admin"))
-from policy import may_foreground_chrome
-
 from owner_control import (
     handback_if_unowned,
     inspect_lease,
     parse_keyguard_showing,
     while_unowned,
 )
+from policy import may_foreground_chrome
 
 HOME = pathlib.Path.home() / "agent-phone"
 HOME.mkdir(mode=0o700, exist_ok=True)
@@ -36,10 +35,15 @@ config = json.loads((HOME / "config.json").read_text())
 serial = config["serial"]
 ssh_target = config["ssh_target"]
 foreground_packages = config.get("foreground_recovery_packages", ["com.android.chrome"])
-if not isinstance(foreground_packages, list) or not foreground_packages or any(
-    not isinstance(package, str)
-    or re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+", package) is None
-    for package in foreground_packages
+if (
+    not isinstance(foreground_packages, list)
+    or not foreground_packages
+    or any(
+        not isinstance(package, str)
+        or re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+", package)
+        is None
+        for package in foreground_packages
+    )
 ):
     raise ValueError("invalid foreground recovery packages")
 ssh = None

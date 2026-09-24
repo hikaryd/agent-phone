@@ -18,7 +18,13 @@ class RenderCaddyTests(unittest.TestCase):
 
     def test_bcrypt_dollar_signs_remain_literal(self):
         bcrypt_hash = "$2a$12$" + "A" * 53
-        output = render(self.template, self.control, "owner", bcrypt_hash, pathlib.Path("/data/data/com.termux/files/home"))
+        output = render(
+            self.template,
+            self.control,
+            "owner",
+            bcrypt_hash,
+            pathlib.Path("/data/data/com.termux/files/home"),
+        )
         self.assertIn(bcrypt_hash, output)
         self.assertNotIn("__", output)
 
@@ -26,9 +32,21 @@ class RenderCaddyTests(unittest.TestCase):
         bcrypt_hash = "$2a$12$" + "A" * 53
         invalid = dict(self.control, origin="https://elsewhere.example")
         with self.assertRaises(ValueError):
-            render(self.template, invalid, "owner", bcrypt_hash, pathlib.Path("/data/data/com.termux/files/home"))
+            render(
+                self.template,
+                invalid,
+                "owner",
+                bcrypt_hash,
+                pathlib.Path("/data/data/com.termux/files/home"),
+            )
         with self.assertRaises(ValueError):
-            render(self.template + " __UNKNOWN__", self.control, "owner", bcrypt_hash, pathlib.Path("/data/data/com.termux/files/home"))
+            render(
+                self.template + " __UNKNOWN__",
+                self.control,
+                "owner",
+                bcrypt_hash,
+                pathlib.Path("/data/data/com.termux/files/home"),
+            )
 
 
 if __name__ == "__main__":

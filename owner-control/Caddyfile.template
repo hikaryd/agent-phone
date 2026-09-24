@@ -257,7 +257,10 @@ https://:8443 {
 		header @mime_ttf >Content-Type font/ttf
 		header @mime_png >Content-Type image/png
 		redir @root /owner 302
-		reverse_proxy @websocket 127.0.0.1:5900 {
+		# The owner helper checks the lease throughout each WebSocket connection.
+		reverse_proxy @websocket 127.0.0.1:8766 {
+			header_up Host 127.0.0.1:8766
+			header_up X-Phone-Control __CONTROL_TOKEN__
 			header_up -Authorization
 			header_up -Proxy-Authorization
 			header_up -Cookie

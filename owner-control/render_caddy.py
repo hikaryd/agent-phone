@@ -11,8 +11,12 @@ import re
 def render(template, control, username, bcrypt_hash, termux_home):
     address = ipaddress.IPv4Address(control["lan_ip"])
     if (
-        not address.is_private or address.is_loopback or address.is_link_local
-        or address.is_unspecified or address.is_reserved or address.is_multicast
+        not address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_unspecified
+        or address.is_reserved
+        or address.is_multicast
     ):
         raise ValueError("Expected a private LAN address")
     if control["origin"] != f"https://{address}:8443":
@@ -62,7 +66,9 @@ def main():
         args.termux_home,
     )
     os.umask(0o077)
-    with os.fdopen(os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as file:
+    with os.fdopen(
+        os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w"
+    ) as file:
         file.write(content)
 
 

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Authenticated, fixed-action Phone owner display lease; also imported by bridge."""
 
+import base64
 import contextlib
 import fcntl
+import hashlib
 import hmac
 import html
 import http.server
@@ -13,6 +15,8 @@ import os
 import pathlib
 import re
 import secrets
+import select
+import socket
 import stat as stat_module
 import subprocess
 import time
@@ -21,8 +25,10 @@ HOME = pathlib.Path.home()
 BRIDGE = HOME / "agent-phone"
 LEASE = BRIDGE / "display-owner-lease"
 HOST = "127.0.0.1:8766"
+VNC_PORT = 5900
 MAX_LEASE = 900
 CHROME = "com.android.chrome/com.google.android.apps.chrome.Main"
+WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
 def read_config():
@@ -260,8 +266,8 @@ def record_failure(code, path=HOME / "phone-admin/control-last-error.json"):
         temporary.unlink(missing_ok=True)
 
 
-def lease_snapshot(path=LEASE):
-    """Read only: GET must never consume expiry notification needed by bridge."""
+def current_lease(path=LEASE):
+    """Read only: the bridge still owns expiry revocation and screen handback."""
     try:
         info = path.lstat()
         if (
@@ -275,17 +281,74 @@ def lease_snapshot(path=LEASE):
             value = json.loads(stream.read(4097))
         now = time.monotonic()
         if valid_lease(value, boot_id(), now):
-            return {
-                "active": True,
-                "remaining": min(900, math.ceil(value["expires_monotonic"] - now)),
-            }
+            return value
     except (OSError, ValueError, TypeError):
         pass
+    return None
+
+
+def lease_snapshot(path=LEASE):
+    value = current_lease(path)
+    if value is not None:
+        return {
+            "active": True,
+            "remaining": min(
+                900, math.ceil(value["expires_monotonic"] - time.monotonic())
+            ),
+        }
     return {"active": False, "remaining": 0}
 
 
+def websocket_headers(sock):
+    """Read only a bounded upstream handshake, never an arbitrary HTTP response."""
+    response = bytearray()
+    while b"\r\n\r\n" not in response:
+        chunk = sock.recv(4096)
+        if not chunk or len(response) + len(chunk) > 16384:
+            raise ValueError("invalid VNC handshake")
+        response.extend(chunk)
+    head, remainder = bytes(response).split(b"\r\n\r\n", 1)
+    lines = head.decode("ascii").split("\r\n")
+    if lines[0] != "HTTP/1.1 101 Switching Protocols":
+        raise ValueError("VNC upgrade refused")
+    headers = {}
+    for line in lines[1:]:
+        name, sep, value = line.partition(":")
+        if not sep or name.lower() in headers:
+            raise ValueError("invalid VNC response header")
+        headers[name.lower()] = value.strip()
+    return headers, remainder
+
+
+def connection_upgrade(value):
+    return "upgrade" in {part.strip().lower() for part in value.split(",")}
+
+
+def relay_websocket(client, upstream, lease_id, expires):
+    """Close on expiry, stop, replacement lease, or either disconnected peer."""
+    while True:
+        current = current_lease()
+        remaining = expires - time.monotonic()
+        if current is None or current["lease_id"] != lease_id or remaining <= 0:
+            return
+        ready, _, _ = select.select([client, upstream], [], [], min(0.5, remaining))
+        for source in ready:
+            current = current_lease()
+            if (
+                current is None
+                or current["lease_id"] != lease_id
+                or time.monotonic() >= expires
+            ):
+                return
+            data = source.recv(65536)
+            if not data:
+                return
+            (upstream if source is client else client).sendall(data)
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.0"
+    protocol_version = "HTTP/1.1"
+    rbufsize = 0  # Do not buffer WebSocket frames before the relay takes over.
     timeout = 5
 
     def log_message(self, *_):
@@ -325,6 +388,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self.authorized():
             self.reply(403, "Forbidden")
             return
+        if self.path == "/websockify":
+            self.websocket()
+            return
         if self.path not in ("/owner", "/owner/status"):
             self.reply(404, "Not found")
             return
@@ -353,6 +419,109 @@ class Handler(http.server.BaseHTTPRequestHandler):
             + vnc_link
             + "<p><a href='/owner'>Обновить оставшееся время</a></p>",
         )
+
+    def websocket(self):
+        lease = current_lease()
+        if lease is None or self.headers.get_all("Origin") != [self.server.origin]:
+            self.reply(403, "Forbidden")
+            return
+        connections = self.headers.get_all("Connection", [])
+        if (
+            [value.lower() for value in self.headers.get_all("Upgrade", [])]
+            != ["websocket"]
+            or len(connections) != 1
+            or not connection_upgrade(connections[0])
+            or self.headers.get_all("Sec-WebSocket-Version") != ["13"]
+        ):
+            self.reply(400, "Invalid WebSocket request")
+            return
+        keys = self.headers.get_all("Sec-WebSocket-Key", [])
+        if len(keys) != 1:
+            self.reply(400, "Invalid WebSocket key")
+            return
+        try:
+            key = keys[0]
+            if len(base64.b64decode(key, validate=True)) != 16:
+                raise ValueError("invalid key")
+            key.encode("ascii")
+        except (ValueError, UnicodeError):
+            self.reply(400, "Invalid WebSocket key")
+            return
+        protocols = self.headers.get_all("Sec-WebSocket-Protocol", [])
+        offered = (
+            [part.strip() for part in protocols[0].split(",")] if protocols else []
+        )
+        if len(protocols) > 1 or any(
+            part not in ("binary", "base64") for part in offered
+        ):
+            self.reply(400, "Invalid WebSocket protocol")
+            return
+        upgraded = False
+        try:
+            with socket.create_connection(
+                ("127.0.0.1", VNC_PORT), timeout=3
+            ) as upstream:
+                upstream.sendall(
+                    (
+                        "GET /websockify HTTP/1.1\r\n"
+                        "Host: 127.0.0.1:5900\r\n"
+                        "Connection: Upgrade\r\n"
+                        "Upgrade: websocket\r\n"
+                        f"Origin: {self.server.origin}\r\n"
+                        f"Sec-WebSocket-Key: {key}\r\n"
+                        "Sec-WebSocket-Version: 13\r\n"
+                        + (
+                            f"Sec-WebSocket-Protocol: {', '.join(offered)}\r\n"
+                            if offered
+                            else ""
+                        )
+                        + "\r\n"
+                    ).encode("ascii")
+                )
+                headers, remainder = websocket_headers(upstream)
+                accept = base64.b64encode(
+                    hashlib.sha1((key + WEBSOCKET_GUID).encode("ascii")).digest()
+                ).decode("ascii")
+                if (
+                    headers.get("upgrade", "").lower() != "websocket"
+                    or not connection_upgrade(headers.get("connection", ""))
+                    or headers.get("sec-websocket-accept") != accept
+                    or (
+                        headers.get("sec-websocket-protocol") is not None
+                        and headers["sec-websocket-protocol"] not in offered
+                    )
+                ):
+                    raise ValueError("invalid VNC upgrade")
+                current = current_lease()
+                if current is None or current["lease_id"] != lease["lease_id"]:
+                    self.reply(403, "Owner session expired")
+                    return
+                self.send_response(101, "Switching Protocols")
+                self.send_header("Connection", "Upgrade")
+                self.send_header("Upgrade", "websocket")
+                self.send_header("Sec-WebSocket-Accept", accept)
+                if headers.get("sec-websocket-protocol"):
+                    self.send_header(
+                        "Sec-WebSocket-Protocol", headers["sec-websocket-protocol"]
+                    )
+                self.end_headers()
+                self.wfile.flush()
+                upgraded = True
+                if remainder:
+                    self.connection.sendall(remainder)
+                self.connection.settimeout(1)
+                upstream.settimeout(1)
+                relay_websocket(
+                    self.connection,
+                    upstream,
+                    lease["lease_id"],
+                    lease["expires_monotonic"],
+                )
+        except (OSError, ValueError):
+            if not upgraded:
+                self.reply(503, "VNC unavailable")
+        finally:
+            self.close_connection = True
 
     def do_POST(self):
         if not self.authorized(post=True):
@@ -399,7 +568,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 def main():
     config = read_config()
     token, origin = config["token"], config["origin"]
-    with http.server.HTTPServer(("127.0.0.1", 8766), Handler) as server:
+    with http.server.ThreadingHTTPServer(("127.0.0.1", 8766), Handler) as server:
         server.token = token
         server.origin = origin
         server.serve_forever()
